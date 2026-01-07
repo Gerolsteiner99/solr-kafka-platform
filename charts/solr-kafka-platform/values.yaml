@@ -1,0 +1,8 @@
+image:
+  repository: ghcr.io/<dein-user>/solr-kafka-platform
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8983
