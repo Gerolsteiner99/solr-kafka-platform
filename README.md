@@ -1,20 +1,33 @@
-Apache Solr Docker + Automatisches Backup-System
+# solr-kafka-platform
 
-Dieses Projekt enthält ein vollständig integriertes Apache-Solr-Setup mit:
+Dieses Repository enthält:
 
-automatischen täglichen Backups aller Collections
-Backup-/Restore-Skripten
-Cron-Integration
-Healthcheck-Monitoring
-persistenten Volumes für Daten und Backups
-Dockerfile für ein eigenes Solr-Image
-📁 Projektstruktur
+- ein Docker-Image für Apache Solr mit automatischen Backups
+- Skripte für Backup, Restore und Healthcheck
+- ein Helm-Chart zur Installation im Kubernetes-/Minikube-Cluster
+- eine GitHub Actions CI/CD-Pipeline für:
+  - Build des Docker-Images
+  - Push in GitHub Container Registry (GHCR)
+  - Versionierung und Packaging des Helm-Charts
 
-solr-kafka-platform
-.git/
-.github/
-Dockerfile
-charts/
-crontab
-docker-compose.yml
-scrips/
+## 🚀 Voraussetzungen
+
+- GitHub-Konto
+- Git lokal installiert
+- Minikube oder anderer Kubernetes-Cluster
+- Helm installiert
+- GHCR-Zugriff (GitHub Container Registry)
+
+## 🧱 Projektstruktur
+
+```text
+solr-kafka-platform/
+├── Dockerfile
+├── scripts/
+├── charts/
+│   └── solr-kafka-platform/templates
+├── .github/workflows/ci-cd.yml
+└── README.md
+└── crontab
+└── docker-compose.yml
+
