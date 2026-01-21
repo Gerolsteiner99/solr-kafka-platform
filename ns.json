@@ -1,0 +1,17 @@
+{
+    "apiVersion": "v1",
+    "kind": "Namespace",
+    "metadata": {
+        "creationTimestamp": "2026-01-21T09:54:27Z",
+        "labels": {
+            "kubernetes.io/metadata.name": "solrkafka"
+        },
+        "name": "solrkafka",
+        "resourceVersion": "23720",
+        "uid": "94e44344-ff88-4110-93aa-dff1cc29aa88"
+    },
+    "spec": {},
+    "status": {
+        "phase": "Active"
+    }
+}

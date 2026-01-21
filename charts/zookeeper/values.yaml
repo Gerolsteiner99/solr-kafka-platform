@@ -1,0 +1,59 @@
+# Default values for zookeeper.
+
+replicaCount: 1
+
+storage:
+  size: 5Gi
+
+image:
+  repository: docker.io/bitnami/zookeeper
+  pullPolicy: IfNotPresent
+  tag: 3.9.1
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+securityContext: {}
+
+service:
+  type: ClusterIP
+  ports:
+    client: 2181
+    peer: 2888
+    leader: 3888
+
+resources: {}
+
+livenessProbe:
+  tcpSocket:
+    port: 2181
+
+readinessProbe:
+  tcpSocket:
+    port: 2181
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 1
+  targetCPUUtilizationPercentage: 80
+
+volumes: []
+volumeMounts: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+

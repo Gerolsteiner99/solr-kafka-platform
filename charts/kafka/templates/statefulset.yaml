@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "kafka.fullname" . }}
+spec:
+  serviceName: {{ include "kafka.fullname" . }}-headless
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "kafka.name" . }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ include "kafka.name" . }}
+    spec:
+      containers:
+        - name: kafka
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          ports:
+            - name: kafka
+              containerPort: 9092
+
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            - name: KAFKA_CFG_BROKER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            - name: KAFKA_CFG_ZOOKEEPER_CONNECT
+              value: "{{ .Values.zookeeper.host }}:{{ .Values.zookeeper.port }}"
+
+            - name: KAFKA_CFG_LISTENERS
+              value: "PLAINTEXT://:9092"
+
+            - name: KAFKA_CFG_ADVERTISED_LISTENERS
+              value: 'PLAINTEXT://$(HOSTNAME).{{ include "kafka.fullname" . }}-headless:9092'
+
+            - name: KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "PLAINTEXT:PLAINTEXT"
+
+            - name: KAFKA_CFG_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/kafka
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}

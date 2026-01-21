@@ -1,0 +1,43 @@
+# values.yaml für das Umbrella-Chart "solr-kafka-platform"
+
+solr:
+  fullnameOverride: solrkafka-solr
+  nameOverride: solrkafka-solr
+
+  replicaCount: 1
+  image:
+    repository: solr
+    tag: latest
+
+kafka:
+  fullnameOverride: solrkafka-kafka
+  nameOverride: solrkafka-kafka
+
+  replicaCount: 1
+
+  image:
+    repository: docker.io/bitnami/kafka
+    tag: 3.7.0
+    pullPolicy: IfNotPresent
+
+  storage:
+    size: 5Gi
+
+  zookeeper:
+    host: solrkafka-zookeeper
+    port: 2181
+
+zookeeper:
+  fullnameOverride: solrkafka-zookeeper
+  nameOverride: solrkafka-zookeeper
+
+  replicaCount: 1
+
+  image:
+    repository: docker.io/bitnami/zookeeper
+    tag: 3.9.1
+    pullPolicy: IfNotPresent
+
+  storage:
+    size: 5Gi
+

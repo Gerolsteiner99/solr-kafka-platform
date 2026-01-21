@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "solr.fullname" . }}
+spec:
+  serviceName: {{ include "solr.fullname" . }}-headless
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "solr.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "solr.name" . }}
+    spec:
+      containers:
+        - name: solr
+          image: solr:9.5
+          ports:
+            - name: http
+              containerPort: 8983
+          volumeMounts:
+            - name: data
+              mountPath: /var/solr
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}
+

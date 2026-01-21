@@ -1,0 +1,298 @@
+---
+# Source: solr-kafka-platform/templates/empty.yaml
+# This file prevents Helm from rendering an empty document.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: solrkafka-solr-kafka-platform-placeholder
+data:
+  placeholder: "true"
+---
+# Source: solr-kafka-platform/templates/placeholder.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: solrkafka-solr-kafka-platform-placeholder
+data:
+  placeholder: "true"
+---
+# Source: solr-kafka-platform/charts/kafka/templates/headless-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: solrkafka-headless
+spec:
+  clusterIP: None
+  selector:
+    app: kafka
+  ports:
+    - name: kafka
+      port: 9092
+---
+# Source: solr-kafka-platform/charts/kafka/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: solrkafka
+spec:
+  type: ClusterIP
+  selector:
+    app: kafka
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: kafka
+---
+# Source: solr-kafka-platform/charts/solr/templates/headless-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: solrkafka-headless
+spec:
+  clusterIP: None
+  selector:
+    app: solr
+  ports:
+    - name: http
+      port: 8983
+---
+# Source: solr-kafka-platform/charts/solr/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: solrkafka
+spec:
+  type: ClusterIP
+  selector:
+    app: solr
+  ports:
+    - name: http
+      port: 8983
+      targetPort: http
+---
+# Source: solr-kafka-platform/charts/zookeeper/templates/headless-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: solrkafka-zookeeper-headless
+spec:
+  clusterIP: None
+  selector:
+    app: zookeeper
+  ports:
+    - name: client
+      port: 2181
+    - name: peer
+      port: 2888
+    - name: leader
+      port: 3888
+---
+# Source: solr-kafka-platform/charts/kafka/templates/statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: solrkafka
+spec:
+  serviceName: solrkafka-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+        - name: kafka
+          image: bitnami/kafka:3.7
+
+          ports:
+            - name: kafka
+              containerPort: 9092
+
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            - name: KAFKA_CFG_BROKER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            - name: KAFKA_CFG_ZOOKEEPER_CONNECT
+              value: "zookeeper:2181"
+
+            - name: KAFKA_CFG_LISTENERS
+              value: "PLAINTEXT://:9092"
+
+            - name: KAFKA_CFG_ADVERTISED_LISTENERS
+              value: 'PLAINTEXT://$(HOSTNAME).solrkafka-headless:9092'
+
+            - name: KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "PLAINTEXT:PLAINTEXT"
+
+            - name: KAFKA_CFG_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/kafka
+
+          resources:
+            {}
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+# Source: solr-kafka-platform/charts/solr/templates/statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: solrkafka
+spec:
+  serviceName: solrkafka-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: solr
+  template:
+    metadata:
+      labels:
+        app: solr
+    spec:
+      containers:
+        - name: solr
+          image: solr:9.5
+          ports:
+            - name: http
+              containerPort: 8983
+          volumeMounts:
+            - name: data
+              mountPath: /var/solr
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+# Source: solr-kafka-platform/charts/zookeeper/templates/statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: solrkafka-zookeeper
+spec:
+  serviceName: solrkafka-zookeeper-headless
+  replicas: 1
+  podManagementPolicy: OrderedReady
+  selector:
+    matchLabels:
+      app: zookeeper
+
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - zookeeper
+              topologyKey: "kubernetes.io/hostname"
+
+      containers:
+        - name: zookeeper
+          image: bitnami/zookeeper:3.9
+
+          ports:
+            - name: client
+              containerPort: 2181
+            - name: peer
+              containerPort: 2888
+            - name: leader
+              containerPort: 3888
+
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "echo ruok | nc localhost 2181 | grep imok"
+            initialDelaySeconds: 20
+            periodSeconds: 10
+
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "echo ruok | nc localhost 2181 | grep imok"
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+          env:
+            - name: ZOO_SERVER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            - name: ZOO_SERVERS
+              value: >
+                
+                
+                server.0=solrkafka-zookeeper-0.solrkafka-zookeeper-headless:2888:3888
+                
+
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/zookeeper
+
+          resources:
+            {}
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+# Source: solr-kafka-platform/charts/solr/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: solrkafka
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - host: solr.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: solrkafka
+                port:
+                  number: 8983

@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "zookeeper.fullname" . }}
+spec:
+  serviceName: {{ include "zookeeper.fullname" . }}-headless
+  replicas: {{ .Values.replicaCount }}
+  podManagementPolicy: OrderedReady
+  selector:
+    matchLabels:
+      app: {{ include "zookeeper.name" . }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ include "zookeeper.name" . }}
+    spec:
+
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - {{ include "zookeeper.name" . }}
+              topologyKey: "kubernetes.io/hostname"
+
+      containers:
+        - name: zookeeper
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          ports:
+            - name: client
+              containerPort: 2181
+            - name: peer
+              containerPort: 2888
+            - name: leader
+              containerPort: 3888
+
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "echo ruok | nc localhost 2181 | grep imok"
+            initialDelaySeconds: 20
+            periodSeconds: 10
+
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "echo ruok | nc localhost 2181 | grep imok"
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+          env:
+            - name: ZOO_SERVER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            - name: ZOO_SERVERS
+              value: >
+                {{ $name := include "zookeeper.fullname" . }}
+                {{ range $i, $e := until (.Values.replicaCount | int) }}
+                server.{{ $i }}={{ $name }}-{{ $i }}.{{ $name }}-headless:2888:3888
+                {{ end }}
+
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/zookeeper
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}
+
