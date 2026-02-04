@@ -1,180 +1,101 @@
-# solr-kafka-platform
+# Solr‑Kafka Platform
 
-# Solr‑Kafka‑Platform (Umbrella Helm Chart)
-
-Dieses Projekt stellt eine vollständige Plattform aus **Solr**, **Kafka** und **Zookeeper** bereit.  
-Die Architektur basiert auf einem **Helm‑Umbrella‑Chart**, das drei Subcharts bündelt:
-
-- `solr`
-- `kafka`
-- `zookeeper`
-
-Alle Komponenten laufen als **StatefulSets** in Kubernetes und sind vollständig konfigurierbar.
+Diese Plattform stellt eine vollständige, produktionsnahe Installation von **SolrCloud**, **Kafka** und **ZooKeeper** auf Kubernetes bereit.  
+Sie basiert vollständig auf Helm‑Charts und ist modular aufgebaut, sodass jede Komponente unabhängig konfiguriert und erweitert werden kann.
 
 ---
 
 ## 🚀 Features
 
-- Vollständig parametrisiertes Helm‑Umbrella‑Chart  
-- Saubere Trennung der Subcharts (`charts/solr`, `charts/kafka`, `charts/zookeeper`)  
-- Dynamische Image‑Konfiguration (keine hart codierten Images)  
-- Persistente Volumes für alle StatefulSets  
-- Zookeeper‑basierte Kafka‑Cluster‑Konfiguration  
-- SolrCloud‑fähige Struktur (optional erweiterbar)
+- SolrCloud (3 Nodes) mit Headless‑Service, externem Service und automatischer Collection‑Erstellung
+- ZooKeeper Ensemble (3 Nodes) für SolrCloud und Kafka
+- Kafka Broker (1–3 Nodes, je nach Values)
+- CronJob zur monatlichen Collection‑Erstellung (`coll-MM-YY`)
+- Umbrella‑Chart, das alle Module orchestriert
+- Vollständig Helm‑basiert, reproduzierbar und erweiterbar
 
 ---
 
-## 🏗 Architektur
+## 🧩 Modulübersicht
 
-+-------------------------------------------------------------+ | Solr-Kafka-Platform | | (Umbrella Helm Chart) | +---------------------------+---------------------------------+ | | +-------------------+-------------------+ | | | v v v +---------------+ +---------------+ +---------------+ | Solr | | Kafka | | Zookeeper | | StatefulSet | | StatefulSet | | StatefulSet | +---------------+ +---------------+ +---------------+ | | | | | | | +---------+---------+ | | 
-+-----------------------------+
+### SolrCloud‑Modul (`charts/solr/`)
+- StatefulSet (3 Nodes)
+- Headless Service
+- Externer Service
+- CronJob zur monatlichen Collection‑Erstellung
+- ServiceAccount
+- Optionaler Ingress
 
+### Kafka‑Modul (`charts/kafka/`)
+- StatefulSet
+- Headless Service
+- Externer Service
+- Broker‑Konfiguration über Values
+
+### ZooKeeper‑Modul (`charts/zookeeper/`)
+- StatefulSet
+- Headless Service
+- ConfigMap
+- Service‑Definitionen
+
+### Umbrella‑Chart (`./`)
+- Chart.yaml
+- values.yaml
+- Platzhalter‑Templates
+- Namespace‑Definition (`ns.json`)
 
 ---
 
-## 📦 Struktur
+# 📂 Projektstruktur (kompletter Tree)
 
+```text
+.
+├── Chart.lock
 ├── charts
-│   ├── kafka
-│   │   ├── charts
-│   │   ├── Chart.yaml
-│   │   ├── templates
-│   │   │   ├── headless-service.yaml
-│   │   │   ├── _helpers.tpl
-│   │   │   ├── service.yaml
-│   │   │   └── statefulset.yaml
-│   │   └── values.yaml
-│   ├── solr
-│   │   ├── charts
-│   │   ├── Chart.yaml
-│   │   ├── templates
-│   │   │   ├── headless-service.yaml
-│   │   │   ├── _helpers.tpl
-│   │   │   ├── ingress.yaml
-│   │   │   ├── NOTES.txt
-│   │   │   ├── service.yaml
-│   │   │   └── statefulset.yaml
-│   │   └── values.yaml
-│   └── zookeeper
-│       ├── charts
-│       ├── Chart.yaml
-│       ├── templates
-│       │   ├── headless-service.yaml
-│       │   ├── _helpers.tpl
-│       │   └── statefulset.yaml
-│       └── values.yaml
+│   ├── kafka
+│   │   ├── charts
+│   │   ├── Chart.yaml
+│   │   ├── templates
+│   │   │   ├── headless-service.yaml
+│   │   │   ├── _helpers.tpl
+│   │   │   ├── service.yaml
+│   │   │   └── statefulset.yaml
+│   │   └── values.yaml
+│   ├── kafka-0.1.0.tgz
+│   ├── solr
+│   │   ├── charts
+│   │   ├── Chart.yaml
+│   │   ├── templates
+│   │   │   ├── cronjob-monthly-collection.yaml
+│   │   │   ├── headless-service.yaml
+│   │   │   ├── _helpers.tpl
+│   │   │   ├── ingress.yaml
+│   │   │   ├── NOTES.txt
+│   │   │   ├── serviceaccount.yaml
+│   │   │   ├── service.yaml
+│   │   │   └── statefulset.yaml
+│   │   └── values.yaml
+│   ├── solr-0.1.0.tgz
+│   ├── zookeeper
+│   │   ├── charts
+│   │   ├── Chart.yaml
+│   │   ├── templates
+│   │   │   ├── configmap.yaml
+│   │   │   ├── headless-service.yaml
+│   │   │   ├── _helpers.tpl
+│   │   │   ├── service-headless.yaml
+│   │   │   └── statefulset.yaml
+│   │   └── values.yaml
+│   └── zookeeper-0.1.0.tgz
 ├── Chart.yaml
-├── full.yaml
+├── full.yaml.disabled
 ├── ns.json
 ├── README.md
 ├── rendered.yaml
-├── server.0=solrkafka-zookeeper-0.solrkafka-zookeeper-headless:2888:3888
+├── running-pod.yaml
+├── solr-kafka-working.tar.gz
 ├── templates
-│   ├── _helpers.tpl
-│   └── placeholder.yaml
+│   ├── _helpers.tpl
+│   └── placeholder.yaml
 └── values.yaml
 
-
-
----
-
-## 🔧 Installation
-
-Namespace anlegen:
-
-bash
-kubectl create namespace solrkafka
-
-
-
-Deployment:
-
-bash
-helm upgrade --install solr-kafka . -n solrkafka
-
-
-🔄 Upgrade
-
-bash
-helm upgrade solr-kafka . -n solrkafka --force
-
-
-🧹 Deinstallation
-bash
-helm uninstall solr-kafka -n solrkafka
-
-📄 Lizenz
-Privates Projekt von Gerolsteiner99.
-
-
-# 🧩 **2. Architektur‑Diagramm (ASCII, sofort nutzbar)**
-
-Du kannst es in die README übernehmen oder als eigene Datei `ARCHITECTURE.md` speichern.
-
-# Architekturübersicht
-
-+-------------------------------------------------------------+
-|                     Solr-Kafka-Platform                     |
-|                     (Umbrella Helm Chart)                   |
-+---------------------------+---------------------------------+
-|
-|
-+-------------------+-------------------+
-|                   |                   |
-v                   v                   v
-+---------------+   +---------------+   +---------------+
-|    Solr       |   |    Kafka      |   |  Zookeeper    |
-|  StatefulSet  |   |  StatefulSet  |   |  StatefulSet  |
-+---------------+   +---------------+   +---------------+
-|                   |                   |
-|                   |                   |
-|                   +---------+---------+
-|                             |
-+-----------------------------+
-
-
-# Helm & kubectl Cheatsheet
-
-## 🟦 Helm Befehle
-
-### Installation / Upgrade
-- `helm upgrade --install <release> <chart> -n <ns>`
-- `helm upgrade <release> <chart> -n <ns> --force`
-
-### Analyse & Debugging
-- `helm template <chart>`
-- `helm get values <release> -n <ns>`
-- `helm get manifest <release> -n <ns>`
-- `helm list -n <ns>`
-
-### Chart Management
-- `helm create <chartname>`
-- `helm lint <chart>`
-- `helm package <chart>`
-
-### Entfernen
-- `helm uninstall <release> -n <ns>`
-
----
-
-## 🟩 kubectl Befehle
-
-### Anzeigen
-- `kubectl get pods -n <ns>`
-- `kubectl get statefulset -n <ns>`
-- `kubectl get all -n <ns>`
-- `kubectl get pvc -n <ns>`
-
-### Details
-- `kubectl describe pod <pod> -n <ns>`
-- `kubectl logs <pod> -n <ns>`
-- `kubectl logs -f <pod> -n <ns>`
-
-### Neustart
-- `kubectl delete pod <pod> -n <ns>`
-
-### Exec
-- `kubectl exec -it <pod> -n <ns> -- bash`
-
-### YAML anzeigen
-- `kubectl get statefulset <name> -n <ns> -o yaml | grep image:`

@@ -1,0 +1,25 @@
+name: Helm Lint
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Helm
+      uses: azure/setup-helm@v4
+
+    - name: Helm dependency update
+      run: helm dependency update .
+
+    - name: Helm lint
+      run: helm lint .
+
