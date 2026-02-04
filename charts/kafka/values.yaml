@@ -6,11 +6,11 @@ storage:
   size: 5Gi
 
 zookeeper:
-  host: zookeeper
+  host: solrkafka-zookeeper-headless
   port: 2181
 
 image:
-  repository: docker.io/bitnami/kafka
+  repository: docker.io/apache/kafka
   pullPolicy: IfNotPresent
   tag: 3.7.0
 

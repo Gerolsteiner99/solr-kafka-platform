@@ -5,9 +5,10 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: {{ include "solr.name" . }}
+    app: solrkafka-solr
   ports:
     - name: http
       port: 8983
       targetPort: http
+      protocol: TCP
 

@@ -1,0 +1,26 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: solrkafka-solr-monthly-collections
+spec:
+  schedule: "0 0 1 * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: solr-collection-creator
+              image: solr:latest
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  COLL=$(date +Coll-%m-%y)
+                  echo "Erstelle Collection: $COLL"
+
+                  solr create_collection \
+                    -c "$COLL" \
+                    --shards 2 \
+                    --replication-factor 3 \
+                    --solr-url http://solrkafka-solr:8983/solr

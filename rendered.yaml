@@ -1,18 +1,33 @@
 ---
-# Source: solr-kafka-platform/templates/empty.yaml
-# This file prevents Helm from rendering an empty document.
+# Source: solr-kafka-platform/charts/solr/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: solrkafka-solr
+  labels:
+    app: solrkafka-solr
+---
+# Source: solr-kafka-platform/charts/zookeeper/templates/configmap.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: solrkafka-solr-kafka-platform-placeholder
+  name: solrkafka-zookeeper-config
 data:
-  placeholder: "true"
+  zoo.cfg: |
+    tickTime=2000
+    dataDir=/data
+    dataLogDir=/datalog
+    clientPort=2181
+    initLimit=10
+    syncLimit=5
+    maxClientCnxns=60
+    server.1=solrkafka-zookeeper-0.solrkafka-zookeeper-headless:2888:3888
 ---
 # Source: solr-kafka-platform/templates/placeholder.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: solrkafka-solr-kafka-platform-placeholder
+  name: solr-kafka-platform-placeholder
 data:
   placeholder: "true"
 ---
@@ -20,7 +35,7 @@ data:
 apiVersion: v1
 kind: Service
 metadata:
-  name: solrkafka-headless
+  name: solr-kafka-headless
 spec:
   clusterIP: None
   selector:
@@ -33,7 +48,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: solrkafka
+  name: solr-kafka
 spec:
   type: ClusterIP
   selector:
@@ -47,11 +62,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: solrkafka-headless
+  name: solrkafka-solr-headless
 spec:
   clusterIP: None
   selector:
-    app: solr
+    app: solrkafka-solr
   ports:
     - name: http
       port: 8983
@@ -60,15 +75,16 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: solrkafka
+  name: solrkafka-solr
 spec:
   type: ClusterIP
   selector:
-    app: solr
+    app: solrkafka-solr
   ports:
     - name: http
       port: 8983
       targetPort: http
+      protocol: TCP
 ---
 # Source: solr-kafka-platform/charts/zookeeper/templates/headless-service.yaml
 apiVersion: v1
@@ -78,7 +94,7 @@ metadata:
 spec:
   clusterIP: None
   selector:
-    app: zookeeper
+    app: solrkafka-zookeeper
   ports:
     - name: client
       port: 2181
@@ -87,13 +103,35 @@ spec:
     - name: leader
       port: 3888
 ---
+# Source: solr-kafka-platform/charts/zookeeper/templates/service-headless.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: solrkafka-zookeeper-headless
+  labels:
+    app: solrkafka-zookeeper
+spec:
+  clusterIP: None
+  selector:
+    app: solrkafka-zookeeper
+  ports:
+    - name: client
+      port: 2181
+      targetPort: 2181
+    - name: quorum
+      port: 2888
+      targetPort: 2888
+    - name: leader-election
+      port: 3888
+      targetPort: 3888
+---
 # Source: solr-kafka-platform/charts/kafka/templates/statefulset.yaml
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: solrkafka
+  name: solr-kafka
 spec:
-  serviceName: solrkafka-headless
+  serviceName: solr-kafka-headless
   replicas: 1
   selector:
     matchLabels:
@@ -106,41 +144,44 @@ spec:
     spec:
       containers:
         - name: kafka
-          image: bitnami/kafka:3.7
+          image: "192.168.1.75:30090/kafka:7.5.0"
+          imagePullPolicy: IfNotPresent
 
           ports:
             - name: kafka
               containerPort: 9092
 
           env:
-            - name: HOSTNAME
+            # Pod-Name für advertised.listeners
+            - name: POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
 
+            # ENV-Variablen aus values.yaml
             - name: KAFKA_CFG_BROKER_ID
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
+              value: "0"
+            - name: KAFKA_ZOOKEEPER_CONNECT
+              value: "solrkafka-zookeeper-headless:2181"
+            - name: KAFKA_OVERRIDE_zookeeper_connect
+              value: "solrkafka-zookeeper-headless:2181"
 
-            - name: KAFKA_CFG_ZOOKEEPER_CONNECT
-              value: "zookeeper:2181"
-
-            - name: KAFKA_CFG_LISTENERS
+            # Listener-Konfiguration
+            - name: KAFKA_LISTENERS
               value: "PLAINTEXT://:9092"
 
-            - name: KAFKA_CFG_ADVERTISED_LISTENERS
-              value: 'PLAINTEXT://$(HOSTNAME).solrkafka-headless:9092'
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://$(POD_NAME).solr-kafka-headless:9092"
 
-            - name: KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
               value: "PLAINTEXT:PLAINTEXT"
 
-            - name: KAFKA_CFG_INTER_BROKER_LISTENER_NAME
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
               value: "PLAINTEXT"
 
           volumeMounts:
             - name: data
-              mountPath: /bitnami/kafka
+              mountPath: /var/lib/kafka/data
 
           resources:
             {}
@@ -158,27 +199,71 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: solrkafka
+  name: solrkafka-solr
+  labels:
+    app: solrkafka-solr
 spec:
-  serviceName: solrkafka-headless
-  replicas: 1
+  serviceName: solrkafka-solr-headless
+  replicas: 3
   selector:
     matchLabels:
-      app: solr
+      app: solrkafka-solr
   template:
     metadata:
       labels:
-        app: solr
+        app: solrkafka-solr
     spec:
+      serviceAccountName: solrkafka-solr
+
+      initContainers:
+        - name: init-solr-data
+          image: busybox
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: true
+          command: ["sh", "-c", "mkdir -p /var/solr/data && chown -R 8983:8983 /var/solr/data"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/solr/data
+
       containers:
         - name: solr
-          image: solr:9.5
+          image: "solr:9.4"
+          imagePullPolicy: IfNotPresent
+
           ports:
             - name: http
               containerPort: 8983
+
+          env:
+            - name: SOLR_MODE
+              value: solrcloud
+            - name: ZK_HOST
+              value: ":"
+            - name: SOLR_HEAP
+              value: "512m"
+
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1"
+
+          # Solr im Foreground starten + Log4j2 fixen
+          command: ["bash", "-c"]
+          args:
+            - >
+              cp /opt/solr/server/resources/log4j2.xml /var/solr/log4j2.xml;
+              /opt/solr/bin/solr start -cloud -f
+              -z :;
+
           volumeMounts:
             - name: data
-              mountPath: /var/solr
+              mountPath: /var/solr/data
+
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -186,7 +271,7 @@ spec:
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 5Gi
+            storage: 10Gi
 ---
 # Source: solr-kafka-platform/charts/zookeeper/templates/statefulset.yaml
 apiVersion: apps/v1
@@ -196,92 +281,94 @@ metadata:
 spec:
   serviceName: solrkafka-zookeeper-headless
   replicas: 1
-  podManagementPolicy: OrderedReady
   selector:
     matchLabels:
-      app: zookeeper
+      app: solrkafka-zookeeper
 
   template:
     metadata:
       labels:
-        app: zookeeper
+        app: solrkafka-zookeeper
     spec:
-
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: app
-                    operator: In
-                    values:
-                      - zookeeper
-              topologyKey: "kubernetes.io/hostname"
-
       containers:
         - name: zookeeper
-          image: bitnami/zookeeper:3.9
+          image: "docker.io/library/zookeeper:3.9.1"
+          imagePullPolicy: IfNotPresent
 
           ports:
             - name: client
               containerPort: 2181
-            - name: peer
+            - name: quorum
               containerPort: 2888
-            - name: leader
+            - name: leader-election
               containerPort: 3888
-
-          livenessProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - "echo ruok | nc localhost 2181 | grep imok"
-            initialDelaySeconds: 20
-            periodSeconds: 10
-
-          readinessProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - "echo ruok | nc localhost 2181 | grep imok"
-            initialDelaySeconds: 10
-            periodSeconds: 5
-
-          env:
-            - name: ZOO_SERVER_ID
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-
-            - name: ZOO_SERVERS
-              value: >
-                
-                
-                server.0=solrkafka-zookeeper-0.solrkafka-zookeeper-headless:2888:3888
-                
 
           volumeMounts:
             - name: data
-              mountPath: /bitnami/zookeeper
+              mountPath: /data
+            - name: datalog
+              mountPath: /datalog
+            - name: config
+              mountPath: /conf/zoo.cfg
+              subPath: zoo.cfg
 
-          resources:
-            {}
+      volumes:
+        - name: config
+          configMap:
+            name: solrkafka-zookeeper-config
 
   volumeClaimTemplates:
     - metadata:
         name: data
       spec:
-        accessModes: ["ReadWriteOnce"]
+        accessModes:
+          - ReadWriteOnce
         resources:
           requests:
             storage: 5Gi
+
+    - metadata:
+        name: datalog
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi
+---
+# Source: solr-kafka-platform/charts/solr/templates/cronjob-monthly-collection.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: solrkafka-solr-monthly-collections
+spec:
+  schedule: "0 0 1 * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: solr-collection-creator
+              image: solr:latest
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  COLL=$(date +Coll-%m-%y)
+                  echo "Erstelle Collection: $COLL"
+
+                  solr create_collection \
+                    -c "$COLL" \
+                    --shards 2 \
+                    --replication-factor 3 \
+                    --solr-url http://solrkafka-solr:8983/solr
 ---
 # Source: solr-kafka-platform/charts/solr/templates/ingress.yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: solrkafka
+  name: solrkafka-solr
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
@@ -293,6 +380,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: solrkafka
+                name: solrkafka-solr
                 port:
                   number: 8983

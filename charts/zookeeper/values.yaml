@@ -1,14 +1,25 @@
 # Default values for zookeeper.
 
-replicaCount: 1
+replicaCount: 3
 
 storage:
   size: 5Gi
 
 image:
-  repository: docker.io/bitnami/zookeeper
+  repository: docker.io/library/zookeeper
   pullPolicy: IfNotPresent
   tag: 3.9.1
+
+env:
+  - name: ZOO_CLIENT_PORT
+    value: "2181"
+  - name: ZOO_TICK_TIME
+    value: "2000"
+  - name: ZOO_INIT_LIMIT
+    value: "5"
+  - name: ZOO_SYNC_LIMIT
+    value: "2"
+
 
 imagePullSecrets: []
 

@@ -1,0 +1,12 @@
+dependencies:
+- name: solr
+  repository: file://charts/solr
+  version: 0.1.0
+- name: kafka
+  repository: file://charts/kafka
+  version: 0.1.0
+- name: zookeeper
+  repository: file://charts/zookeeper
+  version: 0.1.0
+digest: sha256:b77aaaf8b9339613c4cda7d15782d21838514a93587018fe0786c9e2b1a71045
+generated: "2026-02-02T10:04:55.37075588-05:00"

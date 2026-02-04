@@ -1,43 +1,45 @@
-# values.yaml für das Umbrella-Chart "solr-kafka-platform"
-
-solr:
-  fullnameOverride: solrkafka-solr
-  nameOverride: solrkafka-solr
-
-  replicaCount: 1
-  image:
-    repository: solr
-    tag: latest
-
+# ============================
+# KAFKA
+# ============================
 kafka:
-  fullnameOverride: solrkafka-kafka
-  nameOverride: solrkafka-kafka
-
   replicaCount: 1
 
   image:
-    repository: docker.io/bitnami/kafka
-    tag: 3.7.0
+    repository: 192.168.1.75:30090/kafka
+    tag: 7.5.0
     pullPolicy: IfNotPresent
 
   storage:
     size: 5Gi
 
-  zookeeper:
-    host: solrkafka-zookeeper
-    port: 2181
+  env:
+    - name: KAFKA_CFG_BROKER_ID
+      value: "0"
+    - name: KAFKA_ZOOKEEPER_CONNECT
+      value: "solrkafka-zookeeper-headless:2181"
+    - name: KAFKA_OVERRIDE_zookeeper_connect
+      value: "solrkafka-zookeeper-headless:2181"
 
+
+# ============================
+# ZOOKEEPER
+# ============================
 zookeeper:
   fullnameOverride: solrkafka-zookeeper
   nameOverride: solrkafka-zookeeper
-
   replicaCount: 1
-
-  image:
-    repository: docker.io/bitnami/zookeeper
-    tag: 3.9.1
-    pullPolicy: IfNotPresent
 
   storage:
     size: 5Gi
+
+  host: solrkafka-zookeeper-headless
+  port: 2181
+
+  image:
+    repository: docker.io/library/zookeeper
+    tag: 3.9.1
+    pullPolicy: IfNotPresent
+
+  config:
+    4lw.commands.whitelist: "ruok,mntr,conf"
 
