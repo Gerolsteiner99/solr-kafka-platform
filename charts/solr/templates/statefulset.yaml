@@ -1,0 +1,167 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "solr.fullname" . }}
+  labels: {{- include "solr.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "solr.fullname" . }}-headless
+  replicas: {{ .Values.replicaCount }}
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels: {{- include "solr.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "solr.labels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8983"
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "solr.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: 120
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - {{ include "solr.name" . }}
+              topologyKey: kubernetes.io/hostname
+      initContainers:
+      - name: init-chmod
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          chown -R 8983:8983 /var/solr
+          chmod 755 /var/solr
+          echo "Permissions fixed for Solr data directory"
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: solr-data
+          mountPath: /var/solr
+      - name: wait-for-zookeeper
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          until nslookup {{ .Values.zookeeper.host | default "zookeeper-headless" }}; do
+            echo "Waiting for ZooKeeper DNS..."
+            sleep 2
+          done
+          echo "ZooKeeper DNS resolved"
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: 8983
+          name: http
+          protocol: TCP
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: SOLR_HOST
+          value: {{ include "solr.host" . }}
+        - name: SOLR_PORT
+          value: "8983"
+        - name: ZK_HOST
+          value: {{ include "solr.zkHost" . }}
+        - name: SOLR_JAVA_MEM
+          value: {{ .Values.configuration.javaMemory | quote }}
+        - name: GC_TUNE
+          value: {{ .Values.configuration.gcTune | quote }}
+        - name: SOLR_OPTS
+          value: {{ .Values.configuration.solrOpts | quote }}
+        - name: SOLR_HEAP
+          value: {{ .Values.configuration.solrHeap | quote }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        command:
+        - docker-entrypoint.sh
+        args:
+        - solr
+        - start
+        - -f
+        - -c
+        - -z
+        - "$(ZK_HOST)"
+        - "-h"
+        - "$(SOLR_HOST)"
+        - "-p"
+        - "8983"
+        volumeMounts:
+        - name: solr-data
+          mountPath: /var/solr
+        {{- with .Values.extraVolumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /solr/admin/info/system
+            port: 8983
+            scheme: HTTP
+          initialDelaySeconds: 90
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /solr/admin/info/system
+            port: 8983
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 20
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /solr
+            port: 8983
+            scheme: HTTP
+          initialDelaySeconds: 120
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - sh
+              - -c
+              - |
+                echo "Gracefully stopping Solr..."
+                # Try to unload cores gracefully
+                curl -X POST "http://localhost:8983/solr/admin/cores?action=UNLOAD&deleteIndex=true&deleteDataDir=true&deleteInstanceDir=true" || true
+                sleep 30
+  volumeClaimTemplates:
+  - metadata:
+      name: solr-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      {{- if .Values.persistence.data.storageClass }}
+      storageClassName: {{ .Values.persistence.data.storageClass | quote }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.persistence.data.size }}

@@ -1,0 +1,383 @@
+# charts/kafka/values.yaml
+
+# Global settings
+global:
+  namespace: solr-kafka-ha
+  clusterDomain: cluster.local
+
+# Kafka Cluster Configuration
+replicaCount: 3
+clusterName: kafka-ha
+
+# Image Configuration
+image:
+  repository: bitnami/kafka
+  tag: "3.7.0"
+  pullPolicy: IfNotPresent
+  # Alternative: docker.io/apache/kafka:3.7.0 (wenn Bitnami Probleme macht)
+
+# Security Context (für Bitnami Image)
+securityContext:
+  enabled: true
+  fsGroup: 1001
+  runAsUser: 1001
+
+# Storage Configuration
+storage:
+  size: "10Gi"
+  storageClass: "fast"
+  accessModes: ["ReadWriteOnce"]
+  # Retention basierend auf Größe und Zeit
+  logRetentionHours: 168    # 7 Tage
+  logRetentionBytes: "10Gi"  # Max Größe pro Partition
+  logSegmentBytes: "1Gi"     # Segment Größe
+  logCleanupPolicy: "delete"  # delete oder compact
+
+# Resource Configuration
+resources:
+  requests:
+    memory: "1Gi"
+    cpu: "500m"
+  limits:
+    memory: "2Gi"
+    cpu: "1000m"
+  # JVM Heap Settings
+  jvmHeap: "-Xmx1g -Xms1g"
+
+# Kafka Configuration
+configuration:
+  # Essential ZooKeeper Connection
+  KAFKA_CFG_ZOOKEEPER_CONNECT: "zookeeper-headless.solr-kafka-ha.svc.cluster.local:2181"
+  
+  # Broker Identification
+  KAFKA_CFG_BROKER_ID_COMMAND: "hostname | sed 's/kafka-//'"
+  
+  # Network & Listeners
+  KAFKA_CFG_LISTENERS: "INTERNAL://:9092,CONTROLLER://:9093"
+  KAFKA_CFG_ADVERTISED_LISTENERS: "INTERNAL://$(POD_NAME).kafka-headless.solr-kafka-ha.svc.cluster.local:9092"
+  KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT"
+  KAFKA_CFG_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+  KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+  
+  # Replication & HA
+  KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: "3"
+  KAFKA_CFG_MIN_INSYNC_REPLICAS: "2"
+  KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: "3"
+  KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "3"
+  KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR: "2"
+  
+  # Topics & Partitions
+  KAFKA_CFG_NUM_PARTITIONS: "3"
+  KAFKA_CFG_NUM_RECOVERY_THREADS_PER_DATA_DIR: "1"
+  
+  # Log Configuration
+  KAFKA_CFG_LOG_FLUSH_INTERVAL_MESSAGES: "10000"
+  KAFKA_CFG_LOG_FLUSH_INTERVAL_MS: "1000"
+  KAFKA_CFG_LOG_RETENTION_HOURS: "168"
+  KAFKA_CFG_LOG_RETENTION_BYTES: "10737418240"  # 10GB
+  KAFKA_CFG_LOG_SEGMENT_BYTES: "1073741824"     # 1GB
+  KAFKA_CFG_LOG_RETENTION_CHECK_INTERVAL_MS: "300000"
+  
+  # Network & Socket
+  KAFKA_CFG_SOCKET_SEND_BUFFER_BYTES: "102400"
+  KAFKA_CFG_SOCKET_RECEIVE_BUFFER_BYTES: "102400"
+  KAFKA_CFG_SOCKET_REQUEST_MAX_BYTES: "104857600"  # 100MB
+  KAFKA_CFG_MAX_REQUEST_SIZE: "10485760"           # 10MB
+  
+  # ZooKeeper Settings
+  KAFKA_CFG_ZOOKEEPER_SESSION_TIMEOUT_MS: "18000"
+  KAFKA_CFG_ZOOKEEPER_CONNECTION_TIMEOUT_MS: "18000"
+  KAFKA_CFG_ZOOKEEPER_SYNC_TIME_MS: "5000"
+  
+  # Controller Settings (für KRaft-ready, falls gewünscht)
+  KAFKA_CFG_PROCESS_ROLES: "broker"
+  KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: ""
+  
+  # Auto Creation (für Production auf false)
+  KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "false"
+  
+  # Security (für Development)
+  ALLOW_PLAINTEXT_LISTENER: "yes"
+  
+  # Performance Tuning
+  KAFKA_CFG_NUM_IO_THREADS: "8"
+  KAFKA_CFG_NUM_NETWORK_THREADS: "3"
+  KAFKA_CFG_NUM_REPLICA_FETCHERS: "2"
+  KAFKA_CFG_REPLICA_FETCH_MAX_BYTES: "10485760"  # 10MB
+  KAFKA_CFG_REPLICA_FETCH_WAIT_MAX_MS: "500"
+  KAFKA_CFG_REPLICA_SOCKET_TIMEOUT_MS: "30000"
+  KAFKA_CFG_REPLICA_LAG_TIME_MAX_MS: "30000"
+  
+  # Unclean Leader Election (für Hochverfügbarkeit auf false)
+  KAFKA_CFG_UNCLEAN_LEADER_ELECTION_ENABLE: "false"
+  
+  # Compression
+  KAFKA_CFG_COMPRESSION_TYPE: "producer"
+  
+  # Message Configuration
+  KAFKA_CFG_MESSAGE_MAX_BYTES: "10485880"  # 10MB + Overhead
+  KAFKA_CFG_REPLICA_FETCH_RESPONSE_MAX_BYTES: "104857600"  # 100MB
+
+# Service Configuration
+service:
+  type: ClusterIP
+  port: 9092
+  targetPort: 9092
+  annotations: {}
+  
+headlessService:
+  enabled: true
+  port: 9092
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+
+# Network Policy
+networkPolicy:
+  enabled: true
+  allowExternal: false
+  allowedNamespaces: []
+  extraIngress: []
+
+# Probes Configuration
+probes:
+  # Liveness Probe
+  liveness:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+    command: ["sh", "-c", "kafka-broker-api-versions.sh --bootstrap-server=localhost:9092"]
+  
+  # Readiness Probe
+  readiness:
+    enabled: true
+    initialDelaySeconds: 45
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+    command: ["sh", "-c", "kafka-broker-api-versions.sh --bootstrap-server=localhost:9092"]
+  
+  # Startup Probe (für langsame Startups)
+  startup:
+    enabled: true
+    initialDelaySeconds: 90
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+    command: ["sh", "-c", "test -f /opt/bitnami/kafka/.initialized"]
+
+# Pod Management
+podManagementPolicy: "Parallel"
+updateStrategy:
+  type: "RollingUpdate"
+  rollingUpdate:
+    partition: 0
+
+# Affinity & Anti-Affinity
+affinity:
+  # Pod Anti-Affinity (Pods auf verschiedenen Nodes)
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: "app.kubernetes.io/name"
+              operator: "In"
+              values: ["kafka"]
+            - key: "app.kubernetes.io/instance"
+              operator: "In"
+              values: ["kafka-ha"]
+        topologyKey: "kubernetes.io/hostname"
+  
+  # Node Affinity (optional)
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 1
+        preference:
+          matchExpressions:
+            - key: "kubernetes.io/arch"
+              operator: "In"
+              values: ["amd64"]
+
+# Tolerations (optional)
+tolerations: []
+
+# Node Selector (optional)
+nodeSelector: {}
+
+# Pod Disruption Budget
+pdb:
+  enabled: true
+  minAvailable: 2  # Mindestens 2 von 3 Brokers verfügbar
+
+# Monitoring
+metrics:
+  enabled: true
+  # Kafka JMX Exporter (für Prometheus)
+  jmx:
+    enabled: true
+    port: 5555
+  # Prometheus Operator ServiceMonitor
+  serviceMonitor:
+    enabled: false
+    interval: "30s"
+    scrapeTimeout: "10s"
+
+# Logging
+logging:
+  # Log4j Configuration
+  loggers:
+    kafka: "INFO"
+    kafka.controller: "INFO"
+    kafka.log.LogCleaner: "INFO"
+    state.change.logger: "INFO"
+  # Garbage Collection Logging
+  gcLog: true
+
+# Environment Variables (zusätzlich)
+extraEnvVars:
+  - name: KAFKA_OPTS
+    value: "-Djava.security.auth.login.config=/dev/null"
+  - name: JMX_PORT
+    value: "5555"
+  - name: KAFKA_JMX_OPTS
+    value: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=$(POD_NAME).kafka-headless.solr-kafka-ha.svc.cluster.local -Dcom.sun.management.jmxremote.rmi.port=5555"
+
+# Volume Mounts (zusätzlich)
+extraVolumeMounts:
+  - name: config
+    mountPath: /opt/bitnami/kafka/config/custom
+    readOnly: true
+
+extraVolumes:
+  - name: config
+    configMap:
+      name: kafka-custom-config
+
+# Init Containers (für Setup)
+initContainers:
+  - name: wait-for-zookeeper
+    image: busybox:1.35
+    command: ['sh', '-c', 'until nslookup zookeeper-headless.solr-kafka-ha.svc.cluster.local; do echo waiting for zookeeper; sleep 2; done']
+
+# Lifecycle Hooks
+lifecycle:
+  preStop:
+    exec:
+      command:
+        - "sh"
+        - "-c"
+        - |
+          # Graceful shutdown
+          echo "Initiating graceful shutdown..."
+          # Stop accepting new connections
+          sleep 30
+          # Flush logs
+          kill -TERM 1
+          sleep 30
+
+# Hooks für Custom Actions
+hooks:
+  # Post-Start Hook (optional)
+  postStart:
+    enabled: false
+    command: ["/bin/sh", "-c", "echo 'Kafka broker started' > /tmp/startup.log"]
+  
+  # Pre-Stop Hook (wird durch lifecycle ersetzt)
+  preStop:
+    enabled: false
+
+# External Access (für Development/Testing)
+externalAccess:
+  enabled: false
+  service:
+    type: LoadBalancer
+    port: 9092
+  autoDiscovery:
+    enabled: false
+
+# Configuration Overrides (für erweiterte Konfiguration)
+configurationOverrides: |
+  # Hier können zusätzliche Kafka Properties hinzugefügt werden
+  # Sie überschreiben die oben definierten Konfigurationen
+  # 
+  # Beispiel: SSL/TLS Konfiguration
+  # ssl.keystore.location=/opt/bitnami/kafka/config/certs/kafka.keystore.jks
+  # ssl.keystore.password=changeit
+  # ssl.key.password=changeit
+  # ssl.truststore.location=/opt/bitnami/kafka/config/certs/kafka.truststore.jks
+  # ssl.truststore.password=changeit
+  # ssl.client.auth=required
+  #
+  # Beispiel: SASL Konfiguration
+  # sasl.enabled.mechanisms=PLAIN
+  # sasl.mechanism.inter.broker.protocol=PLAIN
+  # security.inter.broker.protocol=SASL_PLAINTEXT
+
+# Persistence Configuration (erweitert)
+persistence:
+  enabled: true
+  # Retention Policies
+  deleteClaim: false
+  # Data Directory
+  mountPath: /bitnami/kafka
+  # Sub Path (optional)
+  subPath: ""
+  # Existing Claim (optional)
+  existingClaim: ""
+  # Storage Class Override
+  storageClass: ""
+
+# TLS/SSL Configuration
+tls:
+  enabled: false
+  autoGenerated: false
+  type: "jks"  # jks, pem
+  # Zertifikat Konfiguration
+  certSecret: ""
+  certPassword: ""
+  # Truststore Konfiguration
+  truststoreSecret: ""
+  truststorePassword: ""
+
+# SASL Configuration
+sasl:
+  enabled: false
+  mechanism: "plain"
+  interBrokerMechanism: "plain"
+  # JAAS Konfiguration
+  jaas:
+    clientUsers: []
+    clientPasswords: []
+    interBrokerUser: ""
+    interBrokerPassword: ""
+
+# RBAC Configuration (für Service Account)
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Network Policy (erweitert)
+networkPolicy:
+  # Inter-Namespace Kommunikation
+  allowCrossNamespace: false
+  # Spezifische Pod Selector
+  podSelector: {}
+  # Ingress Rules
+  ingress: []
+
+# Custom Annotations
+annotations: {}
+
+# Custom Labels
+labels: {}
+
+# Priority Class
+priorityClassName: ""
+
+# Sidecars (für zusätzliche Funktionen)
+sidecars: []
+
+# Extra Objects (für zusätzliche Kubernetes Resources)
+extraObjects: []

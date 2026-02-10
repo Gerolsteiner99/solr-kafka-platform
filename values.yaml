@@ -1,0 +1,52 @@
+global:
+  namespace: solr-kafka-platform
+  storageClass: standard
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+
+zookeeper:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: docker.io/library/zookeeper
+    tag: 3.9.1
+    pullPolicy: IfNotPresent
+  persistence:
+    enabled: true
+    size: 10Gi
+  antiAffinity: "hard"
+
+kafka:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: docker.io/apache/kafka
+    tag: 3.7.0
+    pullPolicy: IfNotPresent
+  persistence:
+    enabled: true
+    size: 20Gi
+  zookeeper:
+    enabled: false
+    url: "zookeeper-service:2181"
+  antiAffinity: "hard"
+
+solr:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: docker.io/library/solr
+    tag: 9.4.0
+    pullPolicy: IfNotPresent
+  persistence:
+    enabled: true
+    size: 50Gi
+  zookeeper:
+    connectString: "zookeeper-service:2181/solr"
+  antiAffinity: "hard"

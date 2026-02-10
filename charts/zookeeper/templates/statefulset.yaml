@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "zookeeper.fullname" . }}
+  labels: {{- include "zookeeper.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "zookeeper.headlessServiceName" . }}
+  replicas: {{ .Values.replicaCount }}
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels: {{- include "zookeeper.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "zookeeper.labels" . | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: 60
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - {{ include "zookeeper.name" . }}
+              topologyKey: kubernetes.io/hostname
+      initContainers:
+      - name: init-myid
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          POD_ORDINAL=$(echo $HOSTNAME | sed 's/.*-//')
+          MY_ID=$((POD_ORDINAL + 1))
+          echo $MY_ID > /data/myid
+          echo "Generated myid: $MY_ID for pod $HOSTNAME"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+        ports:
+        - containerPort: 2181
+          name: client
+        - containerPort: 2888
+          name: server
+        - containerPort: 3888
+          name: leader-election
+        env:
+        - name: ZOO_MY_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: ZOO_SERVERS
+          value: "server.1={{ include "zookeeper.fullname" . }}-0.{{ include "zookeeper.headlessServiceName" . }}:2888:3888 server.2={{ include "zookeeper.fullname" . }}-1.{{ include "zookeeper.headlessServiceName" . }}:2888:3888 server.3={{ include "zookeeper.fullname" . }}-2.{{ include "zookeeper.headlessServiceName" . }}:2888:3888"
+        - name: ZOO_TICK_TIME
+          value: "{{ .Values.configuration.tickTime | default 2000 }}"
+        - name: ZOO_INIT_LIMIT
+          value: "{{ .Values.configuration.initLimit | default 10 }}"
+        - name: ZOO_SYNC_LIMIT
+          value: "{{ .Values.configuration.syncLimit | default 5 }}"
+        - name: ZOO_MAX_CLIENT_CNXNS
+          value: "{{ .Values.configuration.maxClientCnxns | default 60 }}"
+        - name: ZOO_STANDALONE_ENABLED
+          value: "{{ .Values.configuration.standaloneEnabled | default "false" }}"
+        - name: ZOO_ADMINSERVER_ENABLED
+          value: "{{ .Values.configuration.adminServerEnabled | default "false" }}"
+        - name: ZOO_4LW_COMMANDS_WHITELIST
+          value: "{{ .Values.configuration.fourLetterWords | default "*" }}"
+        resources:
+          {{- toYaml .Values.resources | default "{}" | nindent 10 }}
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - "echo ruok | nc localhost 2181 | grep imok"
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - "echo ruok | nc localhost 2181 | grep imok"
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - sh
+              - -c
+              - |
+                echo "Gracefully stopping ZooKeeper..."
+                sleep 30
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      {{- if .Values.persistence.data.storageClass }}
+      storageClassName: {{ .Values.persistence.data.storageClass | quote }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.persistence.data.size | default "1Gi" }}

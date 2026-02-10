@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Chart.Name }}-config
+data:
+  solr.in.sh: |
+    # Solr Configuration
+    SOLR_HEAP="{{ .Values.solrJavaMem }}"
+    ZK_HOST="{{ .Values.zkHost }}"
+    SOLR_HOST="$(hostname -f)"
+    SOLR_PORT="8983"
+    
+    # Kafka Integration
+    KAFKA_BOOTSTRAP_SERVERS="{{ .Values.kafkaBootstrapServers }}"
+    
+    # Enable Prometheus metrics
+    ENABLE_PROMETHEUS_METRICS="true"
+    
+    # Additional JVM options
+    GC_TUNE="-XX:+UseG1GC -XX:+PerfDisableSharedMem -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=250"
+    
+  solr.xml: |
+    <?xml version="1.0" encoding="UTF-8" ?>
+    <solr>
+      <solrcloud>
+        <str name="host">${host:}</str>
+        <int name="hostPort">${jetty.port:8983}</int>
+        <str name="hostContext">${hostContext:solr}</str>
+        <int name="zkClientTimeout">${zkClientTimeout:30000}</int>
+        <bool name="genericCoreNodeNames">${genericCoreNodeNames:true}</bool>
+      </solrcloud>
+      <shardHandlerFactory name="shardHandlerFactory"
+        class="HttpShardHandlerFactory">
+        <int name="socketTimeout">${socketTimeout:0}</int>
+        <int name="connTimeout">${connTimeout:0}</int>
+      </shardHandlerFactory>
+    </solr>

@@ -1,0 +1,521 @@
+# charts/zookeeper/values.yaml
+
+# Global settings
+global:
+  namespace: solr-kafka-ha
+  clusterDomain: cluster.local
+
+# ZooKeeper Ensemble Configuration
+nameOverride: "zookeeper"
+fullnameOverride: "zookeeper"
+replicaCount: 3
+clusterName: "zookeeper-ha"
+
+# Image Configuration
+image:
+  repository: docker.io/library/zookeeper
+  tag: "3.9.4"
+  pullPolicy: "IfNotPresent"
+  # Optional: digest for pinned version
+  # digest: ""
+
+# Security Context
+securityContext:
+  enabled: true
+  fsGroup: 1000
+  runAsUser: 1000
+  runAsNonRoot: true
+
+# Service Account
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# ZooKeeper Configuration
+configuration:
+  # Core ZooKeeper settings
+  tickTime: 2000
+  initLimit: 10
+  syncLimit: 5
+  maxClientCnxns: 60
+  maxSessionTimeout: 40000
+  minSessionTimeout: 4000
+  
+  # Ensemble settings
+  standaloneEnabled: false
+  adminServerEnabled: false
+  reconfigEnabled: false
+  
+  # Network settings
+  quorumListenOnAllIPs: true
+  clientPortAddress: ""
+  
+  # Four letter words (monitoring commands)
+  fourLetterWords: "*"
+  
+  # Authentication & Security
+  # enable auth if needed
+  authProvider: ""
+  requireClientAuthScheme: ""
+  
+  # JVM Settings
+  jvmFlags: "-Xmx512m -Xms512m"
+  jvmExtraFlags: ""
+  heapSize: "512M"
+  newSize: ""
+  maxNewSize: ""
+  
+  # Logging
+  logLevel: "INFO"
+  metricsProvider: ""
+  
+  # Snapshot settings
+  snapCount: 100000
+  purgeInterval: 0
+  autopurgeSnapRetainCount: 3
+  autopurgePurgeInterval: 1
+
+# Storage Configuration
+storage:
+  enabled: true
+  size: "1Gi"
+  storageClass: "standard"
+  accessModes: ["ReadWriteOnce"]
+  
+  # Data and log directories
+  dataDir: "/data"
+  dataLogDir: "/datalog"
+  
+  # Retention
+  deleteClaim: false
+  existingClaim: ""
+  subPath: ""
+
+# Service Configuration
+service:
+  # Regular service (load balancer)
+  type: "ClusterIP"
+  port: 2181
+  targetPort: 2181
+  nodePort: ""
+  annotations: {}
+  labels: {}
+  
+  # External access (optional)
+  external:
+    enabled: false
+    type: "LoadBalancer"
+    port: 2181
+    annotations: {}
+
+# Headless Service (required for StatefulSet)
+headlessService:
+  enabled: true
+  port: 2181
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+  publishNotReadyAddresses: true
+
+# Network Policy
+networkPolicy:
+  enabled: false
+  allowExternal: true
+  allowedNamespaces: []
+  extraIngress: []
+
+# Resource Configuration
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "500m"
+
+# Pod Configuration
+pod:
+  # Annotations
+  annotations: {}
+  
+  # Labels
+  labels: {}
+  
+  # Security context for pod
+  securityContext: {}
+  
+  # Priority class
+  priorityClassName: ""
+  
+  # Runtime class
+  runtimeClassName: ""
+  
+  # Scheduler name
+  schedulerName: ""
+  
+  # Termination grace period
+  terminationGracePeriodSeconds: 60
+
+# Probes Configuration
+probes:
+  # Liveness probe
+  liveness:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+    command: ["sh", "-c", "echo ruok | nc localhost 2181 | grep imok"]
+  
+  # Readiness probe
+  readiness:
+    enabled: true
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+    successThreshold: 1
+    command: ["sh", "-c", "echo ruok | nc localhost 2181 | grep imok"]
+  
+  # Startup probe (for slow startups)
+  startup:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+    command: ["sh", "-c", "test -f /data/myid"]
+
+# Affinity & Anti-Affinity
+affinity:
+  # Pod Anti-Affinity (spread pods across nodes)
+  podAntiAffinity:
+    type: "preferred"  # preferred or required
+    weight: 100
+    topologyKey: "kubernetes.io/hostname"
+    
+  # Node Affinity (optional)
+  nodeAffinity: {}
+  # Example:
+  #   requiredDuringSchedulingIgnoredDuringExecution:
+  #     nodeSelectorTerms:
+  #     - matchExpressions:
+  #       - key: node-type
+  #         operator: In
+  #         values:
+  #         - zoo
+
+# Tolerations
+tolerations: []
+# Example:
+# - key: "dedicated"
+#   operator: "Equal"
+#   value: "zookeeper"
+#   effect: "NoSchedule"
+
+# Node Selector
+nodeSelector: {}
+# Example:
+#   node-type: zoo
+
+# Pod Disruption Budget
+pdb:
+  enabled: true
+  minAvailable: 2  # At least 2 out of 3 pods available
+  # Alternatively use maxUnavailable
+  # maxUnavailable: 1
+
+# Update Strategy
+updateStrategy:
+  type: "RollingUpdate"
+  rollingUpdate:
+    partition: 0
+    maxUnavailable: 1
+
+# Pod Management Policy
+podManagementPolicy: "Parallel"
+
+# Extra Environment Variables
+extraEnvVars: []
+# Example:
+# - name: ZOO_LOG4J_PROP
+#   value: "INFO,ROLLINGFILE"
+# - name: ZOO_SKIP_ACL
+#   value: "yes"
+
+# Extra Environment Variables from ConfigMaps/Secrets
+extraEnvVarsCM: []
+extraEnvVarsSecret: []
+
+# Extra Volume Mounts
+extraVolumeMounts: []
+# Example:
+# - name: custom-config
+#   mountPath: /conf/custom
+#   readOnly: true
+
+# Extra Volumes
+extraVolumes: []
+# Example:
+# - name: custom-config
+#   configMap:
+#     name: zookeeper-custom-config
+
+# Init Containers
+initContainers: []
+# Example:
+# - name: wait-for-dns
+#   image: busybox:1.35
+#   command: ['sh', '-c', 'until nslookup zookeeper-headless; do echo waiting for DNS; sleep 2; done']
+
+# Sidecar Containers
+sidecars: []
+# Example for metrics exporter:
+# - name: metrics
+#   image: bitnami/zookeeper-exporter:latest
+#   ports:
+#   - name: metrics
+#     containerPort: 9141
+#   env:
+#   - name: ZK_SERVER
+#     value: "localhost:2181"
+
+# Lifecycle Hooks
+lifecycle:
+  preStop:
+    enabled: true
+    command:
+      - "sh"
+      - "-c"
+      - |
+        echo "Gracefully stopping ZooKeeper..."
+        # Flush any pending writes
+        sleep 30
+
+# Prometheus Metrics
+metrics:
+  enabled: false
+  # ZooKeeper metrics via JMX
+  jmx:
+    enabled: false
+    port: 7000
+  # Prometheus Operator ServiceMonitor
+  serviceMonitor:
+    enabled: false
+    interval: "30s"
+    scrapeTimeout: "10s"
+    labels: {}
+    relabelings: []
+    metricRelabelings: []
+
+# Authentication & Security
+auth:
+  enabled: false
+  # TLS/SSL Configuration
+  tls:
+    enabled: false
+    type: "jks"  # jks, pem
+    certSecret: ""
+    certPassword: ""
+    truststoreSecret: ""
+    truststorePassword: ""
+  
+  # SASL Configuration
+  sasl:
+    enabled: false
+    mechanism: ""
+    jaasConfig: ""
+
+# Logging Configuration
+logging:
+  # Console log level
+  level: "INFO"
+  
+  # Log4j configuration
+  log4j:
+    enabled: false
+    config: |
+      # Custom log4j configuration
+      log4j.rootLogger=INFO, stdout
+      log4j.appender.stdout=org.apache.log4j.ConsoleAppender
+      log4j.appender.stdout.layout=org.apache.log4j.PatternLayout
+      log4j.appender.stdout.layout.ConversionPattern=%d{ISO8601} [myid:%X{myid}] - %-5p [%t:%C{1}@%L] - %m%n
+
+# Backup Configuration
+backup:
+  enabled: false
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention: 7  # Keep 7 backups
+  storage:
+    size: "5Gi"
+    storageClass: "standard"
+  image:
+    repository: bitnami/kubectl
+    tag: "latest"
+    pullPolicy: "IfNotPresent"
+
+# Custom ZooKeeper Configuration
+customConfig: ""
+# Example:
+#   globalOutstandingLimit=1000
+#   preAllocSize=65536
+#   snapCount=100000
+
+# ConfigMap Configuration
+configMap:
+  enabled: true
+  name: ""
+  annotations: {}
+  data: {}
+
+# Secret Configuration (for sensitive data)
+secret:
+  enabled: false
+  name: ""
+  annotations: {}
+  data: {}
+
+# RBAC Configuration
+rbac:
+  create: false
+  rules: []
+
+# Service Monitor for Prometheus Operator
+serviceMonitor:
+  enabled: false
+  interval: "30s"
+  scrapeTimeout: "10s"
+  namespace: ""
+  additionalLabels: {}
+  relabelings: []
+  metricRelabelings: []
+  selector: {}
+
+# Pod Monitor for Prometheus Operator
+podMonitor:
+  enabled: false
+  interval: "30s"
+  scrapeTimeout: "10s"
+  namespace: ""
+  additionalLabels: {}
+  relabelings: []
+  metricRelabelings: []
+
+# Grafana Dashboard
+grafanaDashboard:
+  enabled: false
+  namespace: ""
+  labels: {}
+  annotations: {}
+  json: ""
+
+# Extra Objects (additional Kubernetes resources)
+extraObjects: []
+# Example:
+# - apiVersion: v1
+#   kind: ConfigMap
+#   metadata:
+#     name: zookeeper-scripts
+#   data:
+#     healthcheck.sh: |
+#       #!/bin/bash
+#       echo ruok | nc localhost 2181
+
+# Custom Labels for all resources
+commonLabels: {}
+
+# Custom Annotations for all resources
+commonAnnotations: {}
+
+# Pod Topology Spread Constraints
+topologySpreadConstraints: []
+# Example:
+# - maxSkew: 1
+#   topologyKey: topology.kubernetes.io/zone
+#   whenUnsatisfiable: ScheduleAnyway
+#   labelSelector:
+#     matchLabels:
+#       app.kubernetes.io/name: zookeeper
+
+# HPA Configuration
+autoscaling:
+  enabled: false
+  minReplicas: 3
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+  behavior: {}
+
+# Ingress Configuration (for admin UI if enabled)
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: zookeeper.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Persistence Configuration (advanced)
+persistence:
+  # Data persistence
+  data:
+    enabled: true
+    accessMode: ReadWriteOnce
+    size: "1Gi"
+    storageClass: "standard"
+    selector: {}
+    
+  # Datalog persistence  
+  datalog:
+    enabled: true
+    accessMode: ReadWriteOnce
+    size: "1Gi"
+    storageClass: "standard"
+    selector: {}
+    
+  # Snapshots persistence (optional)
+  snapshots:
+    enabled: false
+    accessMode: ReadWriteOnce
+    size: "500Mi"
+    storageClass: "standard"
+    selector: {}
+
+# Additional Services
+additionalServices: []
+# Example:
+# - name: zookeeper-metrics
+#   type: ClusterIP
+#   ports:
+#   - name: metrics
+#     port: 9141
+#     targetPort: 9141
+#   selector:
+#     app.kubernetes.io/name: zookeeper
+
+# Custom Commands for probes/lifecycle
+customCommands:
+  livenessProbe: []
+  readinessProbe: []
+  startupProbe: []
+  preStopCommand: []
+  postStartCommand: []
+
+# Debug Mode
+debug:
+  enabled: false
+  # Additional debug flags
+  args: []
+  env: []
+
+# Development/Test Overrides
+test:
+  enabled: false
+  image:
+    repository: busybox
+    tag: latest
+  command: ["sleep", "3600"]

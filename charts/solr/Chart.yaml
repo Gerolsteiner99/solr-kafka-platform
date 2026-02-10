@@ -1,0 +1,6 @@
+apiVersion: v2
+name: solr
+description: Apache Solr Cloud for HA Platform
+type: application
+version: 1.0.0
+appVersion: "9.4.1"

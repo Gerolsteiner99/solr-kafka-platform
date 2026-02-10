@@ -1,0 +1,146 @@
+# Production Values für Solr-Kafka-ZooKeeper Platform
+# Erstellt: Fri Feb  6 02:22:27 PM EST 2026
+
+global:
+  namespace: solr-kafka-prod
+  storageClass: standard
+  
+zookeeper:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: docker.io/library/zookeeper
+    tag: "3.9.4"
+    pullPolicy: IfNotPresent
+  
+  # ZooKeeper Konfiguration
+  config:
+    tickTime: 2000
+    initLimit: 10
+    syncLimit: 5
+    maxClientCnxns: 60
+  
+  persistence:
+    enabled: true
+    size: "10Gi"
+    storageClassName: "standard"
+  
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  
+  # Health Checks
+  livenessProbe:
+    tcpSocket:
+      port: 2181
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  
+  readinessProbe:
+    exec:
+      command:
+      - sh
+      - -c
+      - "echo ruok | nc localhost 2181"
+    initialDelaySeconds: 15
+    periodSeconds: 5
+
+kafka:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: docker.io/apache/kafka
+    tag: "3.7.0"
+    pullPolicy: IfNotPresent
+  
+  # Kafka Konfiguration für HA
+  env:
+    KAFKA_BROKER_ID: "{{ .Values.replicaCount }}"
+    KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+    KAFKA_LISTENERS: "PLAINTEXT://:9092"
+    KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://$(POD_NAME).kafka-headless.solr-kafka-prod.svc.cluster.local:9092"
+    KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT"
+    KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+    KAFKA_DEFAULT_REPLICATION_FACTOR: "3"
+    KAFKA_MIN_INSYNC_REPLICAS: "2"
+    KAFKA_NUM_PARTITIONS: "3"
+  
+  persistence:
+    enabled: true
+    size: "20Gi"
+    storageClassName: "standard"
+  
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+  
+  # Health Checks
+  livenessProbe:
+    tcpSocket:
+      port: 9092
+    initialDelaySeconds: 60
+    periodSeconds: 30
+  
+  readinessProbe:
+    tcpSocket:
+      port: 9092
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+solr:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: docker.io/library/solr
+    tag: "9.4.1"
+    pullPolicy: IfNotPresent
+  
+  # Solr Cloud Konfiguration
+  env:
+    SOLR_JAVA_MEM: "-Xms2g -Xmx4g"
+    ZK_HOST: "zookeeper:2181"
+    SOLR_OPTS: "-DzkClientTimeout=30000 -Dsolr.autoSoftCommit.maxTime=1000"
+  
+  # Collection Einstellungen
+  collectionConfig:
+    numShards: 2
+    replicationFactor: 2
+    maxShardsPerNode: 4
+  
+  persistence:
+    enabled: true
+    size: "20Gi"
+    storageClassName: "standard"
+  
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "1000m"
+  
+  # Health Checks
+  livenessProbe:
+    httpGet:
+      path: /solr/admin/info/health
+      port: 8983
+    initialDelaySeconds: 120
+    periodSeconds: 30
+    timeoutSeconds: 10
+  
+  readinessProbe:
+    httpGet:
+      path: /solr/admin/cores
+      port: 8983
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 5

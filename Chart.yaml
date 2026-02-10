@@ -1,0 +1,5 @@
+apiVersion: v2
+name: solr-kafka-ha-platform
+description: High Availability Solr-Kafka-Zookeeper Platform
+version: 1.0.0
+appVersion: "1.0"

@@ -1,0 +1,859 @@
+# charts/solr/values.yaml
+
+# Global settings
+global:
+  namespace: solr-kafka-ha
+  clusterDomain: cluster.local
+
+# Solr Cloud Configuration
+nameOverride: "solr"
+fullnameOverride: "solr"
+replicaCount: 3
+clusterName: "solr-cloud-ha"
+
+# Image Configuration
+image:
+  repository: docker.io/library/solr
+  tag: "9.4.1"
+  pullPolicy: "IfNotPresent"
+  # Optional: digest for pinned version
+  # digest: ""
+  
+  # For custom images
+  # repository: solr
+  # tag: 9.4.1-slim
+
+# Security Context
+securityContext:
+  enabled: true
+  fsGroup: 8983  # Solr runs as user 8983
+  runAsUser: 8983
+  runAsNonRoot: true
+
+# Service Account
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# ZooKeeper Configuration (CRITICAL for HA)
+zookeeper:
+  # ZooKeeper connection string
+  # Format: host:port/chroot
+  # The /solr chroot is recommended for Solr data isolation
+  connectionString: "zookeeper-headless:2181/solr"
+  
+  # Connection timeout
+  connectionTimeout: 30000
+  
+  # Client timeout
+  clientTimeout: 30000
+  
+  # Retry policy
+  retry:
+    maxRetries: 10
+    interval: 1000
+  
+  # ACL (if ZooKeeper has authentication)
+  acl:
+    enabled: false
+    username: ""
+    password: ""
+
+# Solr Configuration
+configuration:
+  # Core Solr settings
+  solrHost: "$(POD_NAME).{{ include \"solr.fullname\" . }}-headless.$(NAMESPACE).svc.cluster.local"
+  solrPort: 8983
+  
+  # Memory settings
+  javaMemory: "-Xms1g -Xmx2g"
+  solrHeap: "2g"
+  
+  # JVM Options
+  solrOpts: "-Djetty.host=0.0.0.0 -Djetty.port=8983 -DzkClientTimeout=30000 -Dlog4j2.formatMsgNoLookups=true"
+  
+  # GC Settings
+  gcTune: "-XX:+UseG1GC -XX:+PerfDisableSharedMem -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=250 -XX:+UseLargePages -XX:+AlwaysPreTouch"
+  
+  # JMX Configuration
+  jmx:
+    enabled: false
+    port: 7574
+    host: "0.0.0.0"
+    authentication: false
+    ssl: false
+  
+  # Logging
+  logLevel: "INFO"
+  logHome: "/var/solr/logs"
+  
+  # Metrics
+  metrics:
+    enabled: true
+    reporterClass: "solr.metrics.reporters.jmx.JmxReporter"
+  
+  # Authentication & Security
+  authentication:
+    enabled: false
+    type: "basic"  # basic, kerberos, jwt
+    # ... additional auth config
+  
+  # SSL/TLS
+  ssl:
+    enabled: false
+    # ... SSL configuration
+  
+  # CORS
+  cors:
+    enabled: true
+    allowedOrigins: "*"
+    allowedMethods: "GET,POST,OPTIONS"
+    allowedHeaders: "*"
+  
+  # Admin UI
+  adminUi:
+    enabled: true
+    
+  # Update Handler
+  updateHandler:
+    autoCommit:
+      maxTime: 15000
+      maxDocs: -1
+      openSearcher: false
+    autoSoftCommit:
+      maxTime: -1
+      maxDocs: -1
+    commitWithin:
+      softCommit: false
+  
+  # Query Settings
+  query:
+    filterCache:
+      size: 512
+      initialSize: 512
+      autowarmCount: 0
+    queryResultCache:
+      size: 512
+      initialSize: 512
+      autowarmCount: 0
+    documentCache:
+      size: 512
+      initialSize: 512
+      autowarmCount: 0
+  
+  # Index Settings
+  index:
+    writer:
+      maxBufferedDocs: -1
+      ramBufferSizeMB: 100
+      useCompoundFile: false
+  
+  # Request Dispatcher
+  requestDispatcher:
+    handleSelect: true
+    addHttpRequestToContext: false
+  
+  # Request Parsers
+  requestParsers:
+    enableRemoteStreaming: true
+    enableStreamBody: true
+    addHttpRequestToContext: false
+    formdataUploadLimitInKB: 2048000
+    multipartUploadLimitInKB: 2048000
+
+# Storage Configuration
+storage:
+  enabled: true
+  size: "10Gi"
+  storageClass: "standard"
+  accessModes: ["ReadWriteOnce"]
+  
+  # Data directories
+  dataDir: "/var/solr/data"
+  logDir: "/var/solr/logs"
+  
+  # Retention
+  deleteClaim: false
+  existingClaim: ""
+  subPath: ""
+  
+  # Backup storage
+  backup:
+    enabled: false
+    size: "5Gi"
+    storageClass: "standard"
+    schedule: "0 3 * * *"  # Daily at 3 AM
+
+# Service Configuration
+service:
+  # Regular service (load balancer)
+  type: "ClusterIP"
+  port: 8983
+  targetPort: 8983
+  nodePort: ""
+  annotations: {}
+  labels: {}
+  
+  # External access (optional)
+  external:
+    enabled: false
+    type: "LoadBalancer"
+    port: 8983
+    annotations: {}
+
+# Headless Service (required for StatefulSet)
+headlessService:
+  enabled: true
+  port: 8983
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+  publishNotReadyAddresses: true
+
+# Network Policy
+networkPolicy:
+  enabled: false
+  allowExternal: true
+  allowedNamespaces: []
+  extraIngress: []
+
+# Resource Configuration
+resources:
+  requests:
+    memory: "2Gi"
+    cpu: "500m"
+  limits:
+    memory: "4Gi"
+    cpu: "1000m"
+
+# Pod Configuration
+pod:
+  # Annotations
+  annotations: {}
+  
+  # Labels
+  labels: {}
+  
+  # Security context for pod
+  securityContext: {}
+  
+  # Priority class
+  priorityClassName: ""
+  
+  # Runtime class
+  runtimeClassName: ""
+  
+  # Scheduler name
+  schedulerName: ""
+  
+  # Termination grace period
+  terminationGracePeriodSeconds: 120
+
+# Probes Configuration
+probes:
+  # Liveness probe
+  liveness:
+    enabled: true
+    initialDelaySeconds: 90
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+    successThreshold: 1
+    httpGet:
+      path: /solr/admin/info/system
+      port: 8983
+      scheme: HTTP
+  
+  # Readiness probe
+  readiness:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+    httpGet:
+      path: /solr/admin/info/system
+      port: 8983
+      scheme: HTTP
+  
+  # Startup probe (for slow startups)
+  startup:
+    enabled: true
+    initialDelaySeconds: 120
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+    httpGet:
+      path: /solr
+      port: 8983
+      scheme: HTTP
+
+# Affinity & Anti-Affinity
+affinity:
+  # Pod Anti-Affinity (spread pods across nodes)
+  podAntiAffinity:
+    type: "preferred"  # preferred or required
+    weight: 100
+    topologyKey: "kubernetes.io/hostname"
+    
+  # Node Affinity (optional)
+  nodeAffinity: {}
+  # Example:
+  #   requiredDuringSchedulingIgnoredDuringExecution:
+  #     nodeSelectorTerms:
+  #     - matchExpressions:
+  #       - key: node-type
+  #         operator: In
+  #         values:
+  #         - solr
+
+# Tolerations
+tolerations: []
+# Example:
+# - key: "dedicated"
+#   operator: "Equal"
+#   value: "solr"
+#   effect: "NoSchedule"
+
+# Node Selector
+nodeSelector: {}
+# Example:
+#   node-type: solr
+
+# Pod Disruption Budget
+pdb:
+  enabled: true
+  minAvailable: 2  # At least 2 out of 3 pods available
+  # Alternatively use maxUnavailable
+  # maxUnavailable: 1
+
+# Update Strategy
+updateStrategy:
+  type: "RollingUpdate"
+  rollingUpdate:
+    partition: 0
+    maxUnavailable: 1
+
+# Pod Management Policy
+podManagementPolicy: "Parallel"
+
+# Init Containers
+initContainers:
+  # Fix permissions for Solr data directory
+  - name: init-chmod
+    image: busybox:1.35
+    command: ["sh", "-c", "chown -R 8983:8983 /var/solr && chmod 755 /var/solr"]
+    securityContext:
+      runAsUser: 0
+    volumeMounts:
+    - name: solr-data
+      mountPath: /var/solr
+  
+  # Wait for ZooKeeper to be ready
+  - name: wait-for-zookeeper
+    image: busybox:1.35
+    command: ['sh', '-c', 'until nslookup zookeeper-headless; do echo waiting for ZooKeeper DNS; sleep 2; done']
+
+# Extra Environment Variables
+extraEnvVars: []
+# Example:
+# - name: SOLR_SSL_ENABLED
+#   value: "true"
+# - name: SOLR_SSL_KEY_STORE
+#   value: "/etc/solr/ssl/keystore.jks"
+# - name: SOLR_SSL_KEY_STORE_PASSWORD
+#   value: "secret"
+# - name: SOLR_SSL_TRUST_STORE
+#   value: "/etc/solr/ssl/truststore.jks"
+# - name: SOLR_SSL_TRUST_STORE_PASSWORD
+#   value: "secret"
+# - name: SOLR_SSL_NEED_CLIENT_AUTH
+#   value: "false"
+# - name: SOLR_SSL_WANT_CLIENT_AUTH
+#   value: "false"
+
+# Extra Environment Variables from ConfigMaps/Secrets
+extraEnvVarsCM: []
+extraEnvVarsSecret: []
+
+# Extra Volume Mounts
+extraVolumeMounts: []
+# Example:
+# - name: custom-config
+#   mountPath: /opt/solr/server/solr/configsets/custom
+#   readOnly: true
+# - name: ssl-certs
+#   mountPath: /etc/solr/ssl
+#   readOnly: true
+
+# Extra Volumes
+extraVolumes: []
+# Example:
+# - name: custom-config
+#   configMap:
+#     name: solr-custom-config
+# - name: ssl-certs
+#   secret:
+#     secretName: solr-ssl-cert
+
+# Sidecar Containers
+sidecars: []
+# Example for metrics exporter:
+# - name: metrics
+#   image: solr-exporter:latest
+#   ports:
+#   - name: metrics
+#     containerPort: 9983
+#   env:
+#   - name: SOLR_URL
+#     value: "http://localhost:8983/solr"
+# Example for backup container:
+# - name: backup
+#   image: solr-backup:latest
+#   command: ["/bin/sh", "-c"]
+#   args:
+#     - |
+#       while true; do
+#         curl -X GET "http://localhost:8983/solr/admin/collections?action=BACKUP&name=backup_$(date +%Y%m%d_%H%M%S)&collection=yourcollection&location=/backup"
+#         sleep 86400
+#       done
+#   volumeMounts:
+#   - name: backup-volume
+#     mountPath: /backup
+
+# Lifecycle Hooks
+lifecycle:
+  preStop:
+    enabled: true
+    exec:
+      command:
+        - "sh"
+        - "-c"
+        - |
+          echo "Gracefully stopping Solr..."
+          # Unload cores gracefully
+          curl -X POST "http://localhost:8983/solr/admin/cores?action=UNLOAD&deleteIndex=true&deleteDataDir=true&deleteInstanceDir=true" || true
+          sleep 30
+  postStart:
+    enabled: false
+    exec:
+      command:
+        - "sh"
+        - "-c"
+        - "echo 'Solr container started' > /tmp/startup.log"
+
+# Prometheus Metrics
+metrics:
+  enabled: false
+  # Solr metrics via JMX
+  jmx:
+    enabled: false
+    port: 7574
+  # Prometheus Operator ServiceMonitor
+  serviceMonitor:
+    enabled: false
+    interval: "30s"
+    scrapeTimeout: "10s"
+    labels: {}
+    relabelings: []
+    metricRelabelings: []
+
+# Authentication & Security
+auth:
+  enabled: false
+  # Basic Authentication
+  basic:
+    enabled: false
+    username: "admin"
+    password: "admin"
+  
+  # TLS/SSL Configuration
+  ssl:
+    enabled: false
+    type: "jks"  # jks, pem
+    certSecret: ""
+    certPassword: ""
+    keystoreSecret: ""
+    keystorePassword: ""
+    truststoreSecret: ""
+    truststorePassword: ""
+
+# Logging Configuration
+logging:
+  # Console log level
+  level: "INFO"
+  
+  # Log4j2 configuration
+  log4j2:
+    enabled: false
+    config: |
+      <?xml version="1.0" encoding="UTF-8"?>
+      <Configuration status="WARN">
+        <Appenders>
+          <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{ISO8601} [%t] %-5p %c (%F:%L) - %m%n"/>
+          </Console>
+        </Appenders>
+        <Loggers>
+          <Root level="info">
+            <AppenderRef ref="Console"/>
+          </Root>
+        </Loggers>
+      </Configuration>
+
+# Collections Configuration (auto-created collections)
+collections:
+  enabled: false
+  list: []
+  # Example:
+  # - name: "gettingstarted"
+  #   configSet: "_default"
+  #   numShards: 1
+  #   replicationFactor: 2
+  #   maxShardsPerNode: 1
+  #   autoAddReplicas: false
+  # - name: "another-collection"
+  #   configSet: "my-config"
+  #   numShards: 2
+  #   replicationFactor: 3
+  #   maxShardsPerNode: 3
+
+# ConfigSets Configuration
+configsets:
+  enabled: false
+  list: []
+  # Example:
+  # - name: "my-config"
+  #   files:
+  #     - name: "solrconfig.xml"
+  #       content: |
+  #         <?xml version="1.0" encoding="UTF-8"?>
+  #         <config>
+  #           <!-- config content -->
+  #         </config>
+  #     - name: "schema.xml"
+  #       content: |
+  #         <?xml version="1.0" encoding="UTF-8"?>
+  #         <schema>
+  #           <!-- schema content -->
+  #         </schema>
+
+# Backup Configuration
+backup:
+  enabled: false
+  schedule: "0 3 * * *"  # Daily at 3 AM
+  retention: 7  # Keep 7 backups
+  location: "/var/solr/backups"
+  collections: []  # List of collections to backup, empty means all
+  
+  # Storage for backups
+  storage:
+    enabled: false
+    size: "10Gi"
+    storageClass: "standard"
+  
+  # Image for backup job
+  image:
+    repository: solr
+    tag: "9.4.1"
+    pullPolicy: "IfNotPresent"
+
+# Custom Solr Configuration
+customConfig: ""
+# Example:
+#   <config>
+#     <requestHandler name="/select" class="solr.SearchHandler">
+#       <lst name="defaults">
+#         <str name="echoParams">explicit</str>
+#         <int name="rows">10</int>
+#       </lst>
+#     </requestHandler>
+#   </config>
+
+# ConfigMap Configuration
+configMap:
+  enabled: false
+  name: ""
+  annotations: {}
+  data: {}
+  # Example:
+  #   solr.xml: |
+  #     <?xml version="1.0" encoding="UTF-8"?>
+  #     <solr>
+  #       <solrcloud>
+  #         <str name="host">${host:}</str>
+  #         <int name="hostPort">${jetty.port:8983}</int>
+  #         <str name="hostContext">${hostContext:solr}</str>
+  #         <int name="zkClientTimeout">${zkClientTimeout:30000}</int>
+  #         <bool name="genericCoreNodeNames">${genericCoreNodeNames:true}</bool>
+  #       </solrcloud>
+  #       <shardHandlerFactory name="shardHandlerFactory"
+  #         class="HttpShardHandlerFactory">
+  #         <int name="socketTimeout">${socketTimeout:0}</int>
+  #         <int name="connTimeout">${connTimeout:0}</int>
+  #       </shardHandlerFactory>
+  #     </solr>
+
+# Secret Configuration (for sensitive data)
+secret:
+  enabled: false
+  name: ""
+  annotations: {}
+  data: {}
+
+# RBAC Configuration
+rbac:
+  create: false
+  rules: []
+
+# Service Monitor for Prometheus Operator
+serviceMonitor:
+  enabled: false
+  interval: "30s"
+  scrapeTimeout: "10s"
+  namespace: ""
+  additionalLabels: {}
+  relabelings: []
+  metricRelabelings: []
+  selector: {}
+
+# Pod Monitor for Prometheus Operator
+podMonitor:
+  enabled: false
+  interval: "30s"
+  scrapeTimeout: "10s"
+  namespace: ""
+  additionalLabels: {}
+  relabelings: []
+  metricRelabelings: []
+
+# Grafana Dashboard
+grafanaDashboard:
+  enabled: false
+  namespace: ""
+  labels: {}
+  annotations: {}
+  json: ""
+
+# Extra Objects (additional Kubernetes resources)
+extraObjects: []
+# Example:
+# - apiVersion: batch/v1
+#   kind: CronJob
+#   metadata:
+#     name: solr-backup
+#   spec:
+#     schedule: "0 3 * * *"
+#     jobTemplate:
+#       spec:
+#         template:
+#           spec:
+#             containers:
+#             - name: backup
+#               image: solr:9.4.1
+#               command: ["/opt/solr/bin/solr", "post", "-c", "gettingstarted", "example/exampledocs/*.xml"]
+
+# Custom Labels for all resources
+commonLabels: {}
+
+# Custom Annotations for all resources
+commonAnnotations: {}
+
+# Pod Topology Spread Constraints
+topologySpreadConstraints: []
+# Example:
+# - maxSkew: 1
+#   topologyKey: topology.kubernetes.io/zone
+#   whenUnsatisfiable: ScheduleAnyway
+#   labelSelector:
+#     matchLabels:
+#       app.kubernetes.io/name: solr
+
+# HPA Configuration
+autoscaling:
+  enabled: false
+  minReplicas: 3
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+  behavior: {}
+
+# Ingress Configuration
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: solr.local
+      paths:
+        - path: /
+          pathType: Prefix
+        - path: /solr
+          pathType: Prefix
+  tls: []
+
+# Persistence Configuration (advanced)
+persistence:
+  # Data persistence
+  data:
+    enabled: true
+    accessMode: ReadWriteOnce
+    size: "10Gi"
+    storageClass: "standard"
+    selector: {}
+    
+  # Log persistence  
+  logs:
+    enabled: false
+    accessMode: ReadWriteOnce
+    size: "5Gi"
+    storageClass: "standard"
+    selector: {}
+    
+  # Backup persistence
+  backup:
+    enabled: false
+    accessMode: ReadWriteOnce
+    size: "10Gi"
+    storageClass: "standard"
+    selector: {}
+
+# Additional Services
+additionalServices: []
+# Example:
+# - name: solr-metrics
+#   type: ClusterIP
+#   ports:
+#   - name: metrics
+#     port: 9983
+#     targetPort: 9983
+#   selector:
+#     app.kubernetes.io/name: solr
+
+# Custom Commands for probes/lifecycle
+customCommands:
+  livenessProbe: []
+  readinessProbe: []
+  startupProbe: []
+  preStopCommand: []
+  postStartCommand: []
+
+# Debug Mode
+debug:
+  enabled: false
+  # Additional debug flags
+  args: []
+  env: []
+
+# Development/Test Overrides
+test:
+  enabled: false
+  image:
+    repository: busybox
+    tag: latest
+  command: ["sleep", "3600"]
+
+# Solr Cloud Settings
+solrCloud:
+  # SolrCloud mode settings
+  enabled: true
+  
+  # Leader election
+  leaderVoteWait: 180000  # 3 minutes
+  leaderConflictResolveWait: 180000
+  
+  # Distributed search
+  shardHandler:
+    socketTimeout: 0
+    connTimeout: 0
+    maxConnectionsPerHost: 20
+    corePoolSize: 0
+    maximumPoolSize: 20
+    maxThreadIdleTime: 5
+    sizeOfQueue: -1
+    fairnessPolicy: false
+  
+  # Auto-add replicas
+  autoAddReplicas: false
+  
+  # Collection management
+  collectionConfigName: "_default"
+  router:
+    name: compositeId
+    field: "id"
+  
+  # Replication
+  replicationFactor: 2
+  maxShardsPerNode: 3
+  
+  # ZNode management
+  zkClientTimeout: 30000
+  zkHost: "zookeeper-headless:2181/solr"
+
+# Plugins and Extensions
+plugins:
+  enabled: false
+  list: []
+  # Example:
+  # - name: "prometheus-exporter"
+  #   url: "https://repo1.maven.org/maven2/io/prometheus/simpleclient/0.9.0/simpleclient-0.9.0.jar"
+  #   config: |
+  #     prometheus {
+  #       path: "/metrics"
+  #       port: 9983
+  #     }
+
+# Monitoring and Health Checks
+monitoring:
+  # Health check endpoint
+  healthCheck:
+    enabled: true
+    path: "/solr/admin/info/system"
+    
+  # Metrics endpoint
+  metrics:
+    enabled: true
+    path: "/solr/admin/metrics"
+    
+  # Ping endpoint
+  ping:
+    enabled: true
+    path: "/solr/admin/ping"
+    
+  # Thread dump endpoint
+  threads:
+    enabled: true
+    path: "/solr/admin/threads"
+
+# Performance Tuning
+performance:
+  # JVM tuning
+  jvm:
+    # Garbage collector
+    gcType: "G1GC"
+    # Heap size ratios
+    newRatio: 2
+    survivorRatio: 8
+    # Metaspace
+    metaspaceSize: "256m"
+    maxMetaspaceSize: "512m"
+    
+  # Solr cache tuning
+  cache:
+    filterCacheSize: 512
+    queryResultCacheSize: 512
+    documentCacheSize: 512
+    fieldValueCacheSize: 512
+    
+  # Index writer
+  indexWriter:
+    ramBufferSizeMB: 100
+    maxBufferedDocs: -1
+    useCompoundFile: false
+    
+  # Query
+  query:
+    maxBooleanClauses: 1024
+    filterCacheAutowarmCount: 0
+    queryResultCacheAutowarmCount: 0
