@@ -1,0 +1,46 @@
+# Kubernetes
+*.kubeconfig
+*.kubectl
+*.helm
+kubeconfig.yaml
+
+# Logs und Temp-Dateien
+*.log
+/tmp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# Backup-Dateien
+*.backup
+*.backup[0-9]*
+*.bak
+*.old
+
+# OS-spezifisch
+.DS_Store
+Thumbs.db
+.directory
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Secrets (NIEMALS ins Git!)
+*.pem
+*.key
+*.crt
+*.keystore
+*.truststore
+secrets.yaml
+.env
+*.env
+
+# Helm Pakete (optional - können neu gebaut werden)
+charts/*.tgz
+solr-kafka-platform-*.tgz
+
+# Test-Backups
+/tmp/ha-platform-test-*.log
